@@ -240,6 +240,7 @@ function iconSvg(name, size = 16) {
     'briefcase':        `<rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>`,
     'clock':            `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`,
     'arrow-right':      `<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>`,
+    'arrow-left':       `<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>`,
     'x':                `<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>`,
     'star':             `<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>`,
     'truck':            `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`,
@@ -1964,7 +1965,7 @@ function renderPayslip(container) {
       </div>
       <div class="card-footer">
         <button class="btn btn-secondary" onclick="goBackToForm()">
-          ${iconSvg('arrow-right',13)} Back to Edit
+          ${iconSvg('arrow-left',13)} Back to Edit
         </button>
         <div style="flex:1"></div>
         <button class="btn btn-primary" onclick="printPayslip()">
@@ -2138,7 +2139,7 @@ function renderRuleEngine(container) {
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-lg);margin-bottom:var(--sp-lg)">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:var(--sp-lg);margin-bottom:var(--sp-lg)">
 
       <!-- PIT Brackets -->
       <div class="card">
@@ -2257,42 +2258,6 @@ function renderRuleEngine(container) {
             </tr>`).join('')}
           </tbody>
         </table>
-      </div>
-    </div>
-
-    <!-- Sample Calculation -->
-    <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Sample Calculation Verification</div>
-          <div class="card-subtitle">Using PRD reference values — Basic 1,361,000 · Transport 350,000 · Phone 20,000</div>
-        </div>
-      </div>
-      <div class="card-body">
-        ${(() => {
-          const c = calculatePayslip(1361000, 350000, 20000);
-          return `
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:var(--sp-lg)">
-            ${[
-              ['Total Earnings',        fmtCurrency(c.totalEarnings),       'primary'],
-              ['Annual Gross',          fmtCurrency(c.annualGross),          'neutral'],
-              ['Personal Relief',       fmtCurrency(c.personalRelief),       'neutral'],
-              ['Annual Taxable Income', fmtCurrency(c.annualTaxableIncome),  'neutral'],
-              ['Annual PIT',            fmtCurrency(c.annualPIT),            'danger'],
-              ['Monthly PIT',          fmtCurrency(c.monthlyPIT),           'danger'],
-              ['SSB Employee',         fmtCurrency(c.monthlySSB),           'danger'],
-              ['Net Pay',               fmtCurrency(c.netPay),               'accent'],
-            ].map(([l, v, col]) => `
-            <div style="padding:var(--sp-md);background:var(--clr-surface-2);border-radius:var(--radius-md);border:1px solid var(--clr-border)">
-              <div style="font-size:var(--font-size-xs);font-weight:600;color:var(--clr-text-muted);text-transform:uppercase;letter-spacing:.05em">${l}</div>
-              <div style="font-size:var(--font-size-md);font-weight:700;color:var(--clr-${col});margin-top:3px">MMK ${v}</div>
-            </div>`).join('')}
-          </div>
-          <div class="alert alert-info mt-lg">
-            <div>${iconSvg('info', 16)}</div>
-            <div>PRD reference: Monthly PIT = 87,880 · SSB = 6,000. Calculated: PIT = ${fmtCurrency(c.monthlyPIT)} · SSB = ${fmtCurrency(c.monthlySSB)}.</div>
-          </div>`;
-        })()}
       </div>
     </div>
 
@@ -3054,7 +3019,7 @@ function renderImportEmployees(container) {
       </div>
       <div class="page-header-actions">
         <button class="btn btn-secondary" onclick="navigate('employees')">
-          ${iconSvg('arrow-right',13)} Back to Employees
+          ${iconSvg('arrow-left',13)} Back to Employees
         </button>
       </div>
     </div>
