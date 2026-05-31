@@ -402,30 +402,6 @@ This lets the app switch formula behavior without code rewrite.
 - Transportation Allowance = 350,000
 - Phone Allowance = 20,000
 
-### System Calculation
-```text
-Total Earnings = 1,361,000 + 350,000 + 20,000 = 1,731,000
-```
-
-```text
-Monthly Employee SSB = MIN(1,731,000, 300,000) * 2% = 6,000
-```
-
-```text
-Annual Gross Taxable Earnings = 1,731,000 * 12 = 20,772,000
-```
-
-```text
-Basic Personal Relief = MIN(20,772,000 * 20%, 10,000,000) = 4,154,400
-```
-
-```text
-Annual Employee SSB Deduction = 6,000 * 12 = 72,000
-```
-
-```text
-Annual Taxable Income = 20,772,000 - 4,154,400 - 72,000 = 16,545,600
-```
 
 ```text
 Annual PIT =
@@ -434,14 +410,6 @@ Annual PIT =
 10% on remaining 6,545,600 = 654,560
 Total Annual PIT = 1,054,560
 ```
-
-```text
-Monthly PIT = 1,054,560 / 12 = 87,880
-```
-
-This sample is only a calculation-engine illustration. The backend must apply the active rule set and any company-approved overrides exactly as configured.
-
----
 
 ## 7. UX and UI Requirements
 
