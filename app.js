@@ -3162,38 +3162,49 @@ function renderMonthlyPayroll(container) {
 
   /* Period key for STATE.payrollRecords */
   const periodKey = () => `${s.year}-${s.month}`;
+  const periodRank = (key) => { const [y, m] = key.split('-').map(Number); return y * 12 + m; };
+
+  /* Most recent saved record for an employee BEFORE the active period */
+  function priorRecord(empId) {
+    const curRank = periodRank(periodKey());
+    let best = null, bestRank = -1;
+    Object.keys(STATE.payrollRecords).forEach(key => {
+      const rank = periodRank(key);
+      const entry = STATE.payrollRecords[key][empId];
+      if (rank < curRank && entry && rank > bestRank) { best = entry; bestRank = rank; }
+    });
+    return best;
+  }
 
   /*
-   * Salary resolution order (gives effortless month-to-month carry-forward):
+   * Resolution order (effortless month-to-month carry-forward):
    *   1. This month's saved record
-   *   2. The employee's standing basicSalary (last value they were paid)
-   *   3. 0
+   *   2. Most recent PRIOR month's record  ← "auto-fill from last month"
+   *   3. The employee's standing value
+   *   4. 0
    */
-  function getSalary(emp) {
+  function getField(emp, field, standing) {
     const rec = STATE.payrollRecords[periodKey()];
-    if (rec && rec[emp.id] && typeof rec[emp.id].basicSalary === 'number') {
-      return rec[emp.id].basicSalary;
-    }
-    return Number(emp.basicSalary) || 0;
+    if (rec && rec[emp.id] && typeof rec[emp.id][field] === 'number') return rec[emp.id][field];
+    const prior = priorRecord(emp.id);
+    if (prior && typeof prior[field] === 'number') return prior[field];
+    return Number(emp[standing]) || 0;
   }
-  function getPhone(emp) {
-    const rec = STATE.payrollRecords[periodKey()];
-    if (rec && rec[emp.id] && typeof rec[emp.id].phoneAllowance === 'number') {
-      return rec[emp.id].phoneAllowance;
-    }
-    return Number(emp.phoneAllowance) || 0;
-  }
+  const getSalary = (emp) => getField(emp, 'basicSalary',   'basicSalary');
+  const getPhone  = (emp) => getField(emp, 'phoneAllowance', 'phoneAllowance');
 
-  /* Persist a salary edit for the active period + update the standing value */
-  function persistSalary(emp, salary) {
+  /* Persist an edit for the active period + update the standing values */
+  function persistRow(emp, salary, phone) {
     const key = periodKey();
-    if (!STATE.payrollRecords[key]) STATE.payrollRecords[key] = {};
-    if (!STATE.payrollRecords[key][emp.id]) STATE.payrollRecords[key][emp.id] = {};
-    STATE.payrollRecords[key][emp.id].basicSalary   = salary;
-    STATE.payrollRecords[key][emp.id].phoneAllowance = getPhone(emp);
-    /* update the standing value so future months pre-fill automatically */
+    if (!STATE.payrollRecords[key])          STATE.payrollRecords[key] = {};
+    if (!STATE.payrollRecords[key][emp.id])  STATE.payrollRecords[key][emp.id] = {};
+    STATE.payrollRecords[key][emp.id].basicSalary    = salary;
+    STATE.payrollRecords[key][emp.id].phoneAllowance = phone;
     const idx = STATE.employees.findIndex(e => e.id === emp.id);
-    if (idx !== -1) STATE.employees[idx].basicSalary = salary;
+    if (idx !== -1) {
+      STATE.employees[idx].basicSalary    = salary;
+      STATE.employees[idx].phoneAllowance = phone;
+    }
     saveState();
   }
 
@@ -3208,21 +3219,36 @@ function renderMonthlyPayroll(container) {
     renderMonthlyPayroll(container);
   };
 
-  /* Inline save — fires on blur. No full re-render (keeps focus smooth);
-     just reformats the field, recomputes the total, and flashes "Saved". */
-  window.updatePayrollSalary = (empId, rawVal, inputEl) => {
+  /* Live: enable/disable the row's Generate button as the user types */
+  window.payrollLiveToggle = (empId) => {
+    const baseEl = document.getElementById('pr-base-' + empId);
+    const genEl  = document.getElementById('pr-gen-' + empId);
+    if (!baseEl || !genEl) return;
+    const hasVal = parseCurrencyInput(baseEl.value) > 0;
+    genEl.disabled = !hasVal;
+    genEl.style.opacity = hasVal ? '1' : '.4';
+    genEl.style.cursor  = hasVal ? 'pointer' : 'not-allowed';
+    genEl.className = 'btn ' + (hasVal ? 'btn-secondary' : 'btn-ghost') + ' btn-sm';
+  };
+
+  /* Inline save — fires on blur. Reformats fields, recomputes total, flashes "Saved". */
+  window.savePayrollRow = (empId) => {
     const emp = STATE.employees.find(e => e.id === empId);
     if (!emp) return;
-    const salary = parseCurrencyInput(rawVal);
-    persistSalary(emp, salary);
-    if (inputEl) inputEl.value = salary ? fmtCurrency(salary) : '';
+    const baseEl  = document.getElementById('pr-base-' + empId);
+    const phoneEl = document.getElementById('pr-phone-' + empId);
+    const salary  = parseCurrencyInput(baseEl ? baseEl.value : '0');
+    const phone   = parseCurrencyInput(phoneEl ? phoneEl.value : '0');
+    persistRow(emp, salary, phone);
+    if (baseEl)  baseEl.value  = salary ? fmtCurrency(salary) : '';
+    if (phoneEl) phoneEl.value = phone  ? fmtCurrency(phone)  : '';
     /* recompute total */
     const totEl = document.getElementById('pr-total');
     if (totEl) {
       const list = filteredEmployees();
       totEl.textContent = fmtCurrency(list.reduce((sum, e) => sum + getSalary(e), 0));
     }
-    /* flash a saved indicator on the row */
+    /* flash saved indicator */
     const flag = document.getElementById('saved-' + empId);
     if (flag) {
       flag.style.opacity = '1';
@@ -3271,11 +3297,11 @@ function renderMonthlyPayroll(container) {
   window.exportPayrollCSV = () => {
     const list = filteredEmployees();
     if (!list.length) { showToast('No data to export.', 'warning'); return; }
-    const headers = ['Employee Name', 'Employee No', 'Department', 'Basic Salary', 'Pay Period'];
+    const headers = ['Employee Name', 'Employee No', 'Department', 'Basic Salary', 'Phone Allowance', 'Pay Period'];
     const period  = `${monthName(s.month)} ${s.year}`;
     let csv = headers.map(h => `"${h}"`).join(',') + '\n';
     csv += list.map(e =>
-      [e.name, e.employeeNo || '', e.department || '', getSalary(e), period]
+      [e.name, e.employeeNo || '', e.department || '', getSalary(e), getPhone(e), period]
         .map(c => `"${c}"`).join(',')
     ).join('\n');
     const fileName = `Payroll_${s.year}-${String(s.month).padStart(2,'0')}.csv`;
@@ -3360,7 +3386,7 @@ function renderMonthlyPayroll(container) {
       <div class="card-header">
         <div>
           <div class="card-title">Employees</div>
-          <div class="card-subtitle">${list.length} employee${list.length !== 1 ? 's' : ''} · ${s.filter.dept || 'all departments'} · ${setCount} with salary set</div>
+          <div class="card-subtitle">${list.length} employee${list.length !== 1 ? 's' : ''} · ${s.filter.dept || 'all departments'} · ${setCount} with salary set · all amounts in MMK</div>
         </div>
       </div>
       ${list.length === 0 ? `
@@ -3376,32 +3402,44 @@ function renderMonthlyPayroll(container) {
               <th style="width:44px">#</th>
               <th>Employee</th>
               <th>Department</th>
-              <th style="text-align:right">Basic Salary (MMK)</th>
-              <th style="text-align:right;width:120px">Payslip</th>
+              <th style="text-align:right;width:170px;white-space:nowrap">Basic Salary</th>
+              <th style="text-align:right;width:170px;white-space:nowrap">Phone Allowance</th>
+              <th style="text-align:right;width:130px;white-space:nowrap">Payslip</th>
             </tr>
           </thead>
           <tbody>
             ${list.map((emp, i) => {
-              const sal = getSalary(emp);
+              const sal   = getSalary(emp);
+              const phone = getPhone(emp);
               return `
             <tr>
-              <td style="color:var(--clr-text-muted);font-size:11px">${i + 1}</td>
-              <td>
+              <td style="vertical-align:middle;color:var(--clr-text-muted);font-size:11px">${i + 1}</td>
+              <td style="vertical-align:middle">
                 <div style="font-weight:600">${emp.name}</div>
                 <div style="font-size:11px;color:var(--clr-text-muted)">${emp.employeeNo || emp.id.slice(0,8)}${emp.designation ? ' · ' + emp.designation : ''}</div>
               </td>
-              <td><span class="badge badge-neutral">${emp.department || '—'}</span></td>
-              <td style="text-align:right;white-space:nowrap">
-                <input type="text" class="form-control" style="text-align:right;max-width:150px;display:inline-block"
-                  value="${sal ? fmtCurrency(sal) : ''}"
+              <td style="vertical-align:middle"><span class="badge badge-neutral">${emp.department || '—'}</span></td>
+              <td style="vertical-align:middle;text-align:right">
+                <div style="position:relative;display:inline-block">
+                  <input type="text" id="pr-base-${emp.id}" class="form-control" style="text-align:right;width:150px"
+                    value="${sal ? fmtCurrency(sal) : ''}"
+                    placeholder="0.00"
+                    oninput="formatInputCommas(this);payrollLiveToggle('${emp.id}')"
+                    onchange="savePayrollRow('${emp.id}')">
+                  <div id="saved-${emp.id}" style="position:absolute;top:100%;right:0;font-size:10px;color:var(--clr-accent);opacity:0;transition:opacity .2s;font-weight:600;pointer-events:none">✓ Saved</div>
+                </div>
+              </td>
+              <td style="vertical-align:middle;text-align:right">
+                <input type="text" id="pr-phone-${emp.id}" class="form-control" style="text-align:right;width:150px;display:inline-block"
+                  value="${phone ? fmtCurrency(phone) : ''}"
                   placeholder="0.00"
                   oninput="formatInputCommas(this)"
-                  onchange="updatePayrollSalary('${emp.id}', this.value, this)">
-                <span id="saved-${emp.id}" style="display:inline-block;margin-left:6px;font-size:11px;color:var(--clr-accent);opacity:0;transition:opacity .2s;font-weight:600">✓ Saved</span>
+                  onchange="savePayrollRow('${emp.id}')">
               </td>
-              <td style="text-align:right">
-                <button class="btn ${sal > 0 ? 'btn-secondary' : 'btn-ghost'} btn-sm"
-                  ${sal > 0 ? '' : 'disabled style="opacity:.4;cursor:not-allowed"'}
+              <td style="vertical-align:middle;text-align:right">
+                <button id="pr-gen-${emp.id}" class="btn ${sal > 0 ? 'btn-secondary' : 'btn-ghost'} btn-sm"
+                  ${sal > 0 ? '' : 'disabled'}
+                  style="white-space:nowrap;opacity:${sal > 0 ? '1' : '.4'};cursor:${sal > 0 ? 'pointer' : 'not-allowed'}"
                   title="Generate &amp; preview payslip"
                   onclick="payrollGenerateOne('${emp.id}')">
                   ${iconSvg('arrow-right',13)} Generate
